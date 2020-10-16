@@ -118,3 +118,145 @@ fdr.cal <- function(altpval,nullpval,rn=NULL){
     
 }
 
+
+
+## Simulate data with hotspot
+##============================
+add_markdist_hotspot <- function(pp,low_marks,high_marks,cell_proportion = 0.2){
+    x       <- pp[["x"]]
+    y       <- pp[["y"]]
+    x_max   <- pp[["window"]][["xrange"]][2]
+    y_max   <- pp[["window"]][["yrange"]][2]
+
+    nmarks  <- length(low_marks)
+    npoints <- pp[['n']]
+    
+    x_half = x_max * 0.5
+    y_half = y_max * 0.5
+
+    center_point <- which.min(sapply(1:npoints,function(p){(x[p]-x_half)^2+(y[p]-y_half)^2}))
+
+
+    all_dist <- sapply(1:npoints,function(p){(x[p]-x[center_point])^2+(y[p]-y[center_point])^2})
+    all_dist_order <- all_dist[order(all_dist)]
+
+    high_ind <- which(all_dist %in% all_dist_order[1:round(npoints*cell_proportion)])
+
+    low_ind = setdiff(1:npoints, high_ind)
+
+    marx = as.data.frame(matrix(NA, nrow = npoints, ncol = nmarks))
+    for (j_gene in 1:nmarks) {
+        marx[low_ind, j_gene]   = low_marks[j_gene]
+        marx[high_ind, j_gene]  = high_marks[j_gene]
+    }
+
+    pp[["marks"]] = marx
+    return(pp)
+}
+
+
+
+
+
+## Simulate data with streak
+##============================
+add_markdist_streak <- function(pp,low_marks,high_marks,cell_proportion = 0.2){
+    x       <- pp[["x"]]
+    y       <- pp[["y"]]
+    x_max   <- pp[["window"]][["xrange"]][2]
+    y_max   <- pp[["window"]][["yrange"]][2]
+
+    nmarks  <- length(low_marks)
+    npoints <- pp[['n']]
+
+    x_half = x_max * 0.5
+    y_half = y_max * 0.5
+
+    # border_point  <- which.max(x)
+    center_point    <- which.min(sapply(1:npoints,function(p){(x[p]-x_half)^2+(y[p]-y_half)^2}))
+    x_dist          <- abs(x[center_point] - x)
+    x_dist_order    <- x_dist[order(x_dist)]
+
+ #  all_dist <- sapply(1:npoints,function(p){(x[p]-x[center_point])^2+(y[p]-y[center_point])^2})
+ #  all_dist_order <- all_dist[order(all_dist)]
+
+    high_ind <- which(x_dist %in% x_dist_order[1:round(npoints*cell_proportion)])
+
+    # high_ind = which(x >= hot_min & x <= hot_max & y >= hot_min & 
+    #     y <= hot_max)
+    low_ind = setdiff(1:npoints, high_ind)
+
+    marx = as.data.frame(matrix(NA, nrow = npoints, ncol = nmarks))
+    for (j_gene in 1:nmarks) {
+        marx[low_ind, j_gene]   = low_marks[j_gene]
+        marx[high_ind, j_gene]  = high_marks[j_gene]
+    }
+
+    pp[["marks"]] = marx
+    return(pp)
+}
+
+
+
+
+## Simulate data with gradient
+##============================
+add_markdist_lin <- function(expr,ranidx,decrease=F){
+    out             <- expr
+    sub_expr        <- expr[ranidx]
+    order_sub_expr  <- sub_expr[order(sub_expr,decreasing=decrease)] 
+    out[ranidx[order(ranidx)]] <- order_sub_expr
+    return(out)
+}
+
+
+
+## Simulate data with gradient
+##============================
+pattern_plot_sparkx <- function(pltdat,igene,xy=T,main=F,titlesize=2,pointsize=3,min.pand=0.99,max.pand=1.01,title=NULL,pal=NULL,expand_par=0.05,ncolors=5){
+    if(!xy){
+        xy              <- matrix(as.numeric(do.call(rbind,strsplit(as.character(pltdat[,1]),split="x"))),ncol=2)
+        rownames(xy)    <- as.character(pltdat[,1])
+        colnames(xy)    <- c("x","y")
+        pd              <- cbind.data.frame(xy,pltdat[,2:ncol(pltdat)])
+    }else{
+        pd              <- pltdat
+    }
+    # pal             <- colorRampPalette(c("mediumseagreen","lightyellow2","deeppink"))
+    library(viridis)
+    if(is.null(pal)){
+       # pal             <- colorRampPalette(c("antiquewhite",viridis_pal(alpha=0.8)(10)[c(10,6,2)]))
+
+      pal             <- colorRampPalette(c("antiquewhite",viridis_pal()(10)[c(6,5,4,2)]))
+
+      # pal             <- colorRampPalette(c("antiquewhite",viridis_pal()(10)[c(6,2)]))
+    }
+   
+    gpt             <- ggplot(pd,aes(x=x, y=y,color=pd[,igene+2])) + 
+                          geom_point(size=pointsize) +
+                        scale_color_gradientn(colours=pal(ncolors))+ 
+                        # viridis::scale_color_viridis(alpha=0.8,option = opt, direction = direct)+
+                        scale_x_discrete(expand = c(0, expand_par))+ 
+                        scale_y_discrete(expand = c(0, expand_par))+
+                        expand_limits(x=c(min(pd$x)*min.pand,max(pd$x)*max.pand),y=c(min(pd$y)*min.pand,max(pd$y)*max.pand))+
+                        theme_bw()
+    if(main){
+        if(is.null(title)){
+          title=colnames(pd)[igene+2]
+        }
+        out = gpt + labs(title = title, x = NULL, y = NULL)+
+              theme(legend.position = "none",plot.title = element_text(hjust = 0.5,size=rel(titlesize),face="italic"))
+      }else{
+        out = gpt + labs(title = NULL, x = NULL, y = NULL) +
+              theme(legend.position = "none") 
+    }
+    return(out)
+}
+
+
+relative_func <- function(expres){
+    maxd    = max(expres)-min(expres)
+    rexpr   = (expres-min(expres))/maxd
+    return(rexpr)
+}
+
